@@ -3,6 +3,8 @@
 var fftSize = Math.pow(2, 13); // 8092 - fft input is a power of two.
 var bufferFillSize = Math.pow(2, 11) // fftSize / 4 = 2048, size of our cycle.
 
+var forReal = true;
+
 // define filters
 var context = new webkitAudioContext();
 
@@ -21,7 +23,8 @@ hp.Q = 0.1;
 // fft
 var fft = new FFT(fftSize, context.sampleRate / 4);
 
-
+function makeItGo() {
+  console.log("Going!");
 navigator.webkitGetUserMedia({ audio : true }, function success(stream) {
   var streamSource = context.createMediaStreamSource(stream);
   var buffer = initBuffer(fftSize);
@@ -62,7 +65,7 @@ navigator.webkitGetUserMedia({ audio : true }, function success(stream) {
       }, noiseThreshold);
       noiseThreshold = noiseThreshold > 0.001 ? 0.001 : noiseThreshold;
       noiseCount++;
-      console.log("noiseThreshold: ", noiseThreshold, " at sample ", noiseCount);
+      // console.log("noiseThreshold: ", noiseThreshold, " at sample ", noiseCount);
     }
 
     var spectrumPoints = [];
@@ -73,7 +76,7 @@ navigator.webkitGetUserMedia({ audio : true }, function success(stream) {
 
     var peaks = [];
     for (var i = 0; i < 8; i++) {
-      if (spectrumPoints[i].y > noiseThreshold)
+      if (spectrumPoints[i].y > noiseThreshold * 5)
         peaks[i] = spectrumPoints[i];
     }
 
@@ -150,13 +153,66 @@ navigator.webkitGetUserMedia({ audio : true }, function success(stream) {
 
   setInterval(whrrr, 100);
 });
+}
+
+
+
+var moving = false;
+var freqRange = [];
+var lastSecond = 0;
 
 function move(freq, note) {
-  console.log("Moving!", freq, note.note);
+  // start
+  if (socket) {
+    freqRange.push(freq);
+    if (!moving) {
+      moving = true;
+      if (forReal) {
+        socket.emit('command', { "start" : 0.5 });
+        console.log('starting');
+      } else {
+
+      }
+      freqRange = [];
+      // commands up, down, by frequency.
+      // frequency range.
+    }
+    if (moving) {
+      var thisSecond = freqRange.slice(-20).reduce(function(acc, e, i, c) {
+        return acc += e
+      }, 0) / 20;
+      if (thisSecond > lastSecond) {
+
+        socket.emit('up', 0.5);
+        console.log("up");
+      } else {
+        socket.emit('down', 0.5);
+        console.log("down");
+      }
+      lastSecond = thisSecond;
+    }
+  } else {
+    // console.log("Waiting on socket.")
+  }
 }
 
 function hover() {
-  console.log("Hovering.");
+  // stop
+  // console.log("Hovering.");
+  if (socket) {
+    // console.log("stopping");
+    if (moving) {
+      moving = false;
+      if (forReal) {
+        socket.emit('command', { "stop" : 1 });
+        console.log('stopping');
+      } else {
+
+      }
+    }
+  } else {
+    // console.log("Waiting on socket.");
+  }
 }
 
 var frequencies = {
@@ -292,6 +348,11 @@ function fill(bfr, data) {
   }
   return bfr;
 }
+
+
+connectSocket();
+makeItGo();
+
 
 // each sample, get amplitude
 
